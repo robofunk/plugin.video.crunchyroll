@@ -153,7 +153,7 @@ def request(args, method, options, failed=False):
 
     # send payload
     url = API.URL + method + ".0.json"
-    response = urlopen(url, payload.encode("utf-8"))
+    response = urlopen(url, payload.encode("utf-8"), 5)
 
     # parse response
     json_data = response.read().decode("utf-8")

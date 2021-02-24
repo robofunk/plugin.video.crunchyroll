@@ -22,6 +22,7 @@ except ImportError:
     from urllib.parse import quote_plus
 
 import xbmc
+import xbmcvfs
 import xbmcgui
 import xbmcplugin
 
@@ -67,9 +68,9 @@ def add_item(args, info, isFolder=True, total_items=0, mediatype="video"):
         # add context menue
         cm = []
         if u"series_id" in u:
-            cm.append((args._addon.getLocalizedString(30045), "XBMC.Container.Update(%s)" % re.sub(r"(?<=mode=)[^&]*", "series", u)))
+            cm.append((args._addon.getLocalizedString(30045), "Container.Update(%s)" % re.sub(r"(?<=mode=)[^&]*", "series", u)))
         if u"collection_id" in u:
-            cm.append((args._addon.getLocalizedString(30046), "XBMC.Container.Update(%s)" % re.sub(r"(?<=mode=)[^&]*", "episodes", u)))
+            cm.append((args._addon.getLocalizedString(30046), "Container.Update(%s)" % re.sub(r"(?<=mode=)[^&]*", "episodes", u)))
         if len(cm) > 0:
             li.addContextMenuItems(cm)
 
@@ -77,7 +78,7 @@ def add_item(args, info, isFolder=True, total_items=0, mediatype="video"):
     li.setArt({"thumb":  info.get("thumb",  "DefaultFolder.png"),
                "poster": info.get("thumb",  "DefaultFolder.png"),
                "banner": info.get("thumb",  "DefaultFolder.png"),
-               "fanart": info.get("fanart", xbmc.translatePath(args._addon.getAddonInfo("fanart"))),
+               "fanart": info.get("fanart",  xbmcvfs.translatePath(args._addon.getAddonInfo("fanart"))),
                "icon":   info.get("thumb",  "DefaultFolder.png")})
 
     # add item to list

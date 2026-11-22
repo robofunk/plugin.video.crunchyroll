@@ -48,6 +48,7 @@ class CloudflareProxy:
         token_type: str = "Bearer",
         ttl_seconds=30,
     ):
+        self.manifest_rewriter = None
         self.server = None
         self.server_thread = None
         self.port = None
@@ -113,15 +114,18 @@ class CloudflareProxy:
                             response = scraper.get(original_url, headers=headers, timeout=30)
 
                             if response.ok:
+                                content = response.content
+                                if self.server.owner.manifest_rewriter:
+                                    content = self.server.owner.manifest_rewriter(content)
                                 # Forward response to Kodi
                                 self.send_response(200)
                                 self.send_header(
                                     "Content-Type", response.headers.get("Content-Type", "application/dash+xml")
                                 )
-                                self.send_header("Content-Length", str(len(response.content)))
+                                self.send_header("Content-Length", str(len(content)))
                                 self.end_headers()
-                                self.wfile.write(response.content)
-                                crunchy_log(f"Proxy served: {len(response.content)} bytes", xbmc.LOGDEBUG)
+                                self.wfile.write(content)
+                                crunchy_log(f"Proxy served: {len(content)} bytes", xbmc.LOGDEBUG)
                             else:
                                 self.send_error(response.status_code, f"Upstream error: {response.status_code}")
 

@@ -64,6 +64,14 @@ msgctxt "#30015"
 msgid "Skip"
 msgstr ""
 
+msgctxt "#30016"
+msgid "Work around proxies that break streaming"
+msgstr ""
+
+msgctxt "#30017"
+msgid "Enable if playback takes very long to start because a network proxy (e.g. Cisco Umbrella) makes Kodi download the whole episode first."
+msgstr ""
+
 msgctxt "#30020"
 msgid "Subtitle Language"
 msgstr ""

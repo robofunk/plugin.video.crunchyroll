@@ -34,6 +34,51 @@ from resources.lib.utils.logging import crunchy_log, log, log_error_with_trace
 from resources.lib.videostream import VideoPlayerStreamData, VideoStream
 
 
+def _get_kodi_major_version() -> int:
+    version = xbmc.getInfoLabel("System.BuildVersion")
+    try:
+        return int(version.split(".", 1)[0])
+    except (AttributeError, ValueError):
+        return 0
+
+
+def _set_mpd_manifest_type(item) -> None:
+    if _get_kodi_major_version() <= 20:
+        item.setProperty("inputstream.adaptive.manifest_type", "mpd")
+
+
+def _set_stream_selection(item, addon) -> None:
+    # with emulated byte ranges a quality switch re-reads the new file from its start, stalling playback
+    if addon.getSetting("emulate_byte_ranges") == "true" and _get_kodi_major_version() >= 20:
+        item.setProperty("inputstream.adaptive.stream_selection_type", "fixed-res")
+
+
+def _set_widevine_drm_properties(item, license_url: str, license_headers: dict[str, str]) -> None:
+    encoded_headers = urlencode(license_headers)
+    if _get_kodi_major_version() >= 22:
+        drm_config = {
+            "com.widevine.alpha": {
+                "license": {
+                    "server_url": license_url,
+                    "req_headers": encoded_headers,
+                    "unwrapper": "json,base64",
+                    "unwrapper_params": {"path_data": "license"},
+                }
+            }
+        }
+        item.setProperty("inputstream.adaptive.drm", json.dumps(drm_config))
+        return
+
+    license_config = {
+        "license_server_url": license_url,
+        "headers": encoded_headers,
+        "post_data": "R{SSM}",
+        "response_data": "JBlicense",
+    }
+    item.setProperty("inputstream.adaptive.license_type", "com.widevine.alpha")
+    item.setProperty("inputstream.adaptive.license_key", "|".join(license_config.values()))
+
+
 class VideoPlayer(Object):
     """Handles playing video using data contained in args object
 
@@ -193,23 +238,16 @@ class VideoPlayer(Object):
                 "x-cr-content-id": args.get_arg("episode_id"),
                 "x-cr-video-token": self._stream_data.token,
             }
-            license_config = {
-                "license_server_url": api.LICENSE_ENDPOINT,
-                "headers": urlencode(license_headers),
-                "post_data": "R{SSM}",
-                "response_data": "JBlicense",
-            }
-
             inputstream_config = {
                 "ssl_verify_peer": False,
             }
 
             item.setProperty("inputstream", "inputstream.adaptive")
-            item.setProperty("inputstream.adaptive.manifest_type", "mpd")
-            item.setProperty("inputstream.adaptive.license_type", "com.widevine.alpha")
+            _set_mpd_manifest_type(item)
+            _set_stream_selection(item, args.addon)
             item.setProperty("inputstream.adaptive.stream_headers", urlencode(manifest_headers))
             item.setProperty("inputstream.adaptive.manifest_headers", urlencode(manifest_headers))
-            item.setProperty("inputstream.adaptive.license_key", "|".join(list(license_config.values())))
+            _set_widevine_drm_properties(item, api.LICENSE_ENDPOINT, license_headers)
             item.setProperty("inputstream.adaptive.config", json.dumps(inputstream_config))
 
             # @todo: i think other meta data like description and images are still fetched from args.

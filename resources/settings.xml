@@ -130,6 +130,11 @@
                     <default>true</default>
                     <control type="toggle"/>
                 </setting>
+                <setting id="emulate_byte_ranges" type="boolean" label="30016" help="30017">
+                    <level>0</level>
+                    <default>false</default>
+                    <control type="toggle"/>
+                </setting>
                 <setting id="enable_skip_intro" type="boolean" label="30011" help="">
                     <level>0</level>
                     <default>false</default>

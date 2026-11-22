@@ -33,6 +33,7 @@ from resources.lib.context import PluginContext
 from resources.lib.models.base import Object, PlayableItem
 from resources.lib.models.exceptions import CrunchyrollError
 from resources.lib.proxy import get_cloudflare_proxy
+from resources.lib.range_proxy import get_media_range_proxy
 from resources.lib.utils.api_data import (
     get_cms_object_data_by_ids,
     get_listables_from_response,
@@ -223,6 +224,11 @@ class VideoStream(Object):
                     user_agent=api.CRUNCHYROLL_UA,
                     auth_token=api.account_data.access_token,
                     token_type=api.account_data.token_type,
+                )
+                proxy.manifest_rewriter = (
+                    get_media_range_proxy(api.CRUNCHYROLL_UA).rewrite_manifest
+                    if args.addon.getSetting("emulate_byte_ranges") == "true"
+                    else None
                 )
                 proxied_url = proxy.get_proxied_url(url)
                 crunchy_log(f"Proxying manifest URL: {redact_url(url)} -> {redact_url(proxied_url)}")

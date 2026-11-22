@@ -3,13 +3,22 @@
 TDD: written before implementation.
 """
 
+import json
 import threading
 from unittest.mock import MagicMock, patch
+from urllib.parse import urlencode
 
 import pytest
 
 from resources.lib.gui import SkipModalDialog
-from resources.lib.videoplayer import VideoPlayer, update_playhead
+from resources.lib.videoplayer import (
+    VideoPlayer,
+    _get_kodi_major_version,
+    _set_mpd_manifest_type,
+    _set_stream_selection,
+    _set_widevine_drm_properties,
+    update_playhead,
+)
 
 
 @pytest.fixture
@@ -19,6 +28,94 @@ def video_player_ctx(ctx):
         player = VideoPlayer(ctx)
         player._player = mock_player.return_value
         yield player
+
+
+class TestWidevineDrmProperties:
+    def test_kodi_major_version_from_build_label(self, monkeypatch):
+        monkeypatch.setattr("resources.lib.videoplayer.xbmc.getInfoLabel", lambda name: "23.0-ALPHA1 (22.90.701)")
+
+        assert _get_kodi_major_version() == 23
+
+    def test_uses_new_drm_schema_on_kodi_22_and_newer(self, monkeypatch):
+        monkeypatch.setattr("resources.lib.videoplayer.xbmc.getInfoLabel", lambda name: "23.0-ALPHA1")
+        item = MagicMock()
+        headers = {"Content-Type": "application/octet-stream", "Authorization": "Bearer token"}
+
+        _set_widevine_drm_properties(item, "https://license.example/license", headers)
+
+        properties = {call.args[0]: call.args[1] for call in item.setProperty.call_args_list}
+        drm_config = json.loads(properties["inputstream.adaptive.drm"])
+        license_config = drm_config["com.widevine.alpha"]["license"]
+        assert license_config["server_url"] == "https://license.example/license"
+        assert license_config["req_headers"] == urlencode(headers)
+        assert license_config["unwrapper"] == "json,base64"
+        assert license_config["unwrapper_params"] == {"path_data": "license"}
+        assert "inputstream.adaptive.license_key" not in properties
+
+    def test_keeps_legacy_properties_before_kodi_22(self, monkeypatch):
+        monkeypatch.setattr("resources.lib.videoplayer.xbmc.getInfoLabel", lambda name: "21.2")
+        item = MagicMock()
+        headers = {"Content-Type": "application/octet-stream"}
+
+        _set_widevine_drm_properties(item, "https://license.example/license", headers)
+
+        properties = {call.args[0]: call.args[1] for call in item.setProperty.call_args_list}
+        assert properties["inputstream.adaptive.license_type"] == "com.widevine.alpha"
+        assert properties["inputstream.adaptive.license_key"] == "|".join(
+            ["https://license.example/license", urlencode(headers), "R{SSM}", "JBlicense"]
+        )
+        assert "inputstream.adaptive.drm" not in properties
+
+
+class TestMpdManifestType:
+    def test_sets_manifest_type_on_kodi_20(self, monkeypatch):
+        monkeypatch.setattr("resources.lib.videoplayer.xbmc.getInfoLabel", lambda name: "20.2")
+        item = MagicMock()
+
+        _set_mpd_manifest_type(item)
+
+        item.setProperty.assert_called_once_with("inputstream.adaptive.manifest_type", "mpd")
+
+    @pytest.mark.parametrize("version", ["21.2", "22.0", "23.0-ALPHA1"])
+    def test_omits_manifest_type_on_kodi_21_and_newer(self, monkeypatch, version):
+        monkeypatch.setattr("resources.lib.videoplayer.xbmc.getInfoLabel", lambda name: version)
+        item = MagicMock()
+
+        _set_mpd_manifest_type(item)
+
+        item.setProperty.assert_not_called()
+
+
+class TestStreamSelection:
+    @staticmethod
+    def _addon(emulate):
+        addon = MagicMock()
+        addon.getSetting.side_effect = lambda key: "true" if key == "emulate_byte_ranges" and emulate else "false"
+        return addon
+
+    def test_fixed_resolution_when_emulating_byte_ranges(self, monkeypatch):
+        monkeypatch.setattr("resources.lib.videoplayer.xbmc.getInfoLabel", lambda name: "21.2")
+        item = MagicMock()
+
+        _set_stream_selection(item, self._addon(True))
+
+        item.setProperty.assert_called_once_with("inputstream.adaptive.stream_selection_type", "fixed-res")
+
+    def test_user_setting_kept_without_emulation(self, monkeypatch):
+        monkeypatch.setattr("resources.lib.videoplayer.xbmc.getInfoLabel", lambda name: "21.2")
+        item = MagicMock()
+
+        _set_stream_selection(item, self._addon(False))
+
+        item.setProperty.assert_not_called()
+
+    def test_not_set_before_kodi_20(self, monkeypatch):
+        monkeypatch.setattr("resources.lib.videoplayer.xbmc.getInfoLabel", lambda name: "19.5")
+        item = MagicMock()
+
+        _set_stream_selection(item, self._addon(True))
+
+        item.setProperty.assert_not_called()
 
 
 class TestVideoPlayerInit:

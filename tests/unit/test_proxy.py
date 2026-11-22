@@ -203,6 +203,27 @@ def test_proxy_handler_returns_404_for_unknown_path():
         proxy.stop()
 
 
+def test_proxy_handler_applies_manifest_rewriter():
+    """A configured manifest_rewriter transforms the upstream manifest before it is served."""
+    mock_response = MagicMock()
+    mock_response.ok = True
+    mock_response.content = b"<manifest/>"
+    mock_response.headers = {"Content-Type": "application/dash+xml"}
+    mock_scraper = MagicMock()
+    mock_scraper.get.return_value = mock_response
+
+    proxy = CloudflareProxy(user_agent="A", auth_token="B", ttl_seconds=5)
+    proxy.manifest_rewriter = lambda content: content.replace(b"manifest", b"rewritten")
+
+    with patch("resources.lib.proxy.cloudscraper.create_scraper", return_value=mock_scraper):
+        proxied_url = proxy.get_proxied_url("https://www.crunchyroll.com/manifest.mpd")
+        try:
+            with urllib.request.urlopen(proxied_url, timeout=5) as resp:
+                assert resp.read() == b"<rewritten/>"
+        finally:
+            proxy.stop()
+
+
 def test_proxy_uses_injected_credentials_not_globals():
     """CloudflareProxy must not read from a global G object at construction time."""
     # Construction should be purely from arguments; any global import would fail

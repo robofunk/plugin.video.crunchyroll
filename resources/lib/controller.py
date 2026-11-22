@@ -53,6 +53,8 @@ from .next_episode.prompt import (
     start_episode,
 )
 from .next_episode.resolver import PrefetchTrigger, fetch_next_episode
+from .proxy import cleanup_cloudflare_proxy
+from .range_proxy import stop_media_range_proxy
 from .utils.api_data import get_listables_from_response
 from .utils.images import get_img_from_struct
 from .utils.language import (
@@ -617,6 +619,8 @@ def start_playback(ctx):
             monitor.waitForAbort(1)
     finally:
         video_player.finished()
+        stop_media_range_proxy()
+        cleanup_cloudflare_proxy()
     del video_player
     if tracker is not None and next_episode is not None:
         _continue_with_next_episode(ctx, tracker, next_episode, chain_store, streak)
